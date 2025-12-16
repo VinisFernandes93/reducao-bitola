@@ -33,8 +33,8 @@ num_passes = st.number_input("Quantos passes?", min_value=1, max_value=13, value
 
 # Entradas de redução por passe
 st.markdown("### Reduções por passe (%)")
-reducoes_pct = []   # em porcentagem informada pelo usuário (ex.: 30, 28...)
-reducoes_frac = []  # em fração (0–1) correspondente (ex.: 0.30, 0.28...)
+reducoes_pct = []   # porcentagens informadas por passe (ex.: 30, 28...)
+reducoes_frac = []  # frações (0–1) correspondentes (ex.: 0.30, 0.28...)
 for i in range(1, int(num_passes) + 1):
     r_pct = st.number_input(f"Passe {i}", min_value=0.0, max_value=100.0, value=0.0, step=0.1, format="%.3f")
     reducoes_pct.append(r_pct)
@@ -167,4 +167,7 @@ st.caption(
     • **Redução entre passes (%)** é o valor informado por passe (ex.: 30%, 28%, ...).
     • **Redução acumulada (%)** considera a sequência de fatores: F = ∏(1 - rᵢ).
       Até o passe k: Redução acumulada (%) = (1 - ∏_{i=1..k}(1 - rᵢ)) × 100.
-
+    • A grandeza evolui como Vₖ = V₀ × ∏_{i=1..k}(1 - rᵢ).
+    • Para fio redondo, área = π·d²/4 e d = √(4·área/π).
+    """
+)
