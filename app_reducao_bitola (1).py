@@ -42,7 +42,7 @@ for i in range(1, int(num_passes) + 1):
 
 # Checagem de reduções decrescentes (r1 >= r2 >= r3 ...)
 if len(reducoes_pct) > 1:
-    decrescente = all(reducoes_pct[i] >= reducoes_pct[i+1] for i in range(len(reducoes_pct)-1))
+    decrescente = all(reducoes_pct[i] >= reducoes_pct[i + 1] for i in range(len(reducoes_pct) - 1))
 else:
     decrescente = True
 
@@ -67,7 +67,7 @@ st.metric("Fator restante", f"{fator_restante_total:.6f}")
 
 # Construção da tabela por passe
 linhas = []
-valor_col = ("Diâmetro (mm)" if grandeza == "Diâmetro (mm)" else "Área (mm²)")
+valor_col = "Diâmetro (mm)" if grandeza == "Diâmetro (mm)" else "Área (mm²)"
 valor_atual = valor_inicial if (valor_inicial and valor_inicial > 0) else None
 
 # Linha inicial, se houver valor
@@ -77,3 +77,94 @@ if valor_atual is not None:
         "Redução entre passes (%)": None,
         "Redução acumulada (%)": 0.0,
         "Fator restante": 1.0,
+        valor_col: valor_atual
+    })
+
+# Iteração dos passes
+fator_acum = 1.0
+for idx, r_frac in enumerate(reducoes_frac, start=1):
+    # Fator do passe
+    fator = (1.0 - r_frac)
+    # Atualiza fator acumulado
+    fator_acum *= fator
+
+    # Valor após o passe (se houver valor inicial)
+    if valor_atual is not None:
+        valor_atual = valor_atual * fator
+
+    # Redução entre passes (%) é exatamente o valor informado
+    reducao_entre_pct = reducoes_pct[idx - 1]
+
+    # Redução acumulada (%) até este passe
+    reducao_acum_pct = (1.0 - fator_acum) * 100.0
+
+    linha = {
+        "Passe": idx,
+        "Redução entre passes (%)": reducao_entre_pct,
+        "Redução acumulada (%)": reducao_acum_pct,
+        "Fator restante": fator_acum,
+        valor_col: valor_atual
+    }
+    linhas.append(linha)
+
+# DataFrame principal
+df = pd.DataFrame(linhas)
+
+# Exibir tabela principal
+st.markdown("### Evolução por passe (inclui redução entre passes e acumulada)")
+st.dataframe(df, use_container_width=True)
+
+# Gráfico da grandeza principal (se houver valor inicial)
+if valor_inicial and valor_inicial > 0:
+    st.line_chart(df.set_index("Passe")[valor_col], height=300)
+    st.markdown("---")
+    st.success(f"Valor final ({valor_col}): {valor_atual:.6f}")
+
+# Gráfico da redução entre passes (%)
+if len(df) > 0:
+    df_plot_red = df.dropna(subset=["Redução entre passes (%)"]).set_index("Passe")["Redução entre passes (%)"]
+    st.markdown("### Gráfico — Redução entre passes (%)")
+    st.bar_chart(df_plot_red, height=260)
+
+# Conversões para fio redondo (se houver valor inicial)
+if valor_inicial and valor_inicial > 0 and eh_redondo:
+    if grandeza == "Área (mm²)":
+        # Converter áreas para diâmetros equivalentes
+        valores_area = [lin[valor_col] for lin in linhas if isinstance(lin[valor_col], (int, float))]
+        diametros = [math.sqrt(4.0 * a / math.pi) for a in valores_area]
+        df_diam = pd.DataFrame({
+            "Passe": [lin["Passe"] for lin in linhas if isinstance(lin[valor_col], (int, float))],
+            "Diâmetro (mm)": diametros
+        })
+        st.markdown("### Conversão para diâmetro (fio redondo)")
+        st.dataframe(df_diam, use_container_width=True)
+        st.line_chart(df_diam.set_index("Passe")["Diâmetro (mm)"], height=300)
+    else:
+        # Converter diâmetros para áreas equivalentes
+        valores_diam = [lin[valor_col] for lin in linhas if isinstance(lin[valor_col], (int, float))]
+        areas = [math.pi * (d ** 2) / 4.0 for d in valores_diam]
+        df_area = pd.DataFrame({
+            "Passe": [lin["Passe"] for lin in linhas if isinstance(lin[valor_col], (int, float))],
+            "Área (mm²)": areas
+        })
+        st.markdown("### Conversão para área (fio redondo)")
+        st.dataframe(df_area, use_container_width=True)
+        st.line_chart(df_area.set_index("Passe")["Área (mm²)"], height=300)
+
+# Download dos dados
+csv = df.to_csv(index=False).encode("utf-8")
+st.download_button(
+    label="Baixar tabela em CSV",
+    data=csv,
+    file_name="evolucao_reducao_bitola.csv",
+    mime="text/csv",
+)
+
+# Notas finais
+st.caption(
+    """
+    Notas:
+    • **Redução entre passes (%)** é o valor informado por passe (ex.: 30%, 28%, ...).
+    • **Redução acumulada (%)** considera a sequência de fatores: F = ∏(1 - rᵢ).
+      Até o passe k: Redução acumulada (%) = (1 - ∏_{i=1..k}(1 - rᵢ)) × 100.
+
