@@ -9,6 +9,7 @@ st.markdown(
     """
     Informe as reduções **percentuais por passe** (até 13) e, opcionalmente, o valor inicial de **diâmetro (mm)** ou **área (mm²)**.
     O aplicativo calcula a **redução acumulada**, o **valor final** e mostra a **evolução por passe**.
+    Agora também exibe a **redução individual por passe (%)** e verifica se você está em **reduções decrescentes**.
     """
 )
 
@@ -29,17 +30,27 @@ else:
 num_passes = st.number_input("Quantos passes?", min_value=1, max_value=13, value=5)
 
 st.markdown("### Reduções por passe (%)")
-reducoes = []
+reducoes_pct = []  # em porcentagem informada pelo usuário
+reducoes_frac = [] # em fração (0-1)
 for i in range(1, int(num_passes) + 1):
-    r = st.number_input(f"Passe {i}", min_value=0.0, max_value=100.0, value=0.0, step=0.1, format="%.3f")
-    reducoes.append(r / 100.0)
+    r_pct = st.number_input(f"Passe {i}", min_value=0.0, max_value=100.0, value=0.0, step=0.1, format="%.3f")
+    reducoes_pct.append(r_pct)
+    reducoes_frac.append(r_pct / 100.0)
 
-# Remover passes de redução zero do cálculo acumulado, mas manter na tabela se valor inicial existir
-reducoes_validas = [r for r in reducoes if r > 0]
+# Checagem de reduções decrescentes (r1 >= r2 >= ...)
+if len(reducoes_pct) > 1:
+    decrescente = all(reducoes_pct[i] >= reducoes_pct[i+1] for i in range(len(reducoes_pct)-1))
+else:
+    decrescente = True
+
+if decrescente:
+    st.success("Sequência de reduções: **decrescente** (r₁ ≥ r₂ ≥ r₃ …)")
+else:
+    st.warning("Sequência de reduções: **não decrescente**. Existem passes com redução maior que o anterior.")
 
 # Cálculo do fator acumulado: produto de (1 - r)
 fator_restante = 1.0
-for r in reducoes_validas:
+for r in reducoes_frac:
     fator_restante *= (1.0 - r)
 
 reducao_total_pct = (1.0 - fator_restante) * 100.0
@@ -51,76 +62,93 @@ st.metric("Fator restante", f"{fator_restante:.6f}")
 
 valor_final = None
 
-# Se houver valor inicial, calcular evolução por passe
-if valor_inicial and valor_inicial > 0:
-    valores_por_passe = [valor_inicial]
-    fatores_por_passe = [1.0]
-    for r in reducoes:
-        fator = (1.0 - r)
-        novo_valor = valores_por_passe[-1] * fator
-        valores_por_passe.append(novo_valor)
-        fatores_por_passe.append(fatores_por_passe[-1] * fator)
+# Construção de tabela por passe, sempre mostrando redução do passe (%)
+linhas = []
+fator_acum = 1.0
+valor_atual = valor_inicial if (valor_inicial and valor_inicial > 0) else None
 
-    valor_final = valores_por_passe[-1]
-
-    # Tabela de evolução
-    df = pd.DataFrame({
-        "Passe": list(range(0, len(valores_por_passe))),
-        "Fator restante": fatores_por_passe,
-        ("Diâmetro (mm)" if grandeza == "Diâmetro (mm)" else "Área (mm²)"): valores_por_passe
+# Linha inicial, se houver valor
+if valor_atual is not None:
+    linhas.append({
+        "Passe": "Inicial",
+        "Redução do passe (%)": None,
+        "Fator restante": fator_acum,
+        ("Diâmetro (mm)" if grandeza == "Diâmetro (mm)" else "Área (mm²)"): valor_atual
     })
-    df.loc[0, "Passe"] = "Inicial"
 
-    st.markdown("### Evolução por passe")
+for idx, r_frac in enumerate(reducoes_frac, start=1):
+    fator = (1.0 - r_frac)
+    fator_acum *= fator
+    if valor_atual is not None:
+        valor_atual = valor_atual * fator
+    linhas.append({
+        "Passe": idx,
+        "Redução do passe (%)": reducoes_pct[idx-1],
+        "Fator restante": fator_acum,
+        ("Diâmetro (mm)" if grandeza == "Diâmetro (mm)" else "Área (mm²)"): valor_atual
+    })
+
+# Exibir tabela
+cols_base = ["Passe", "Redução do passe (%)", "Fator restante"]
+valor_col = ("Diâmetro (mm)" if grandeza == "Diâmetro (mm)" else "Área (mm²)")
+
+if valor_atual is not None:
+    df = pd.DataFrame(linhas)
+    st.markdown("### Evolução por passe (com redução individual)")
     st.dataframe(df, use_container_width=True)
 
     # Gráfico da evolução
-    st.line_chart(df.set_index("Passe")[df.columns[-1]], height=300)
+    st.line_chart(df.set_index("Passe")[valor_col], height=300)
 
-    # Conversões para fio redondo
-    if eh_redondo:
-        if grandeza == "Área (mm²)":
-            # Converter áreas para diâmetros equivalentes
-            diametros = [math.sqrt(4.0 * a / math.pi) for a in valores_por_passe]
-            df_diam = pd.DataFrame({
-                "Passe": df["Passe"],
-                "Diâmetro (mm)": diametros
-            })
-            st.markdown("### Conversão para diâmetro (fio redondo)")
-            st.dataframe(df_diam, use_container_width=True)
-            st.line_chart(df_diam.set_index("Passe")["Diâmetro (mm)"], height=300)
-        else:
-            # Converter diâmetros para áreas equivalentes
-            areas = [math.pi * (d ** 2) / 4.0 for d in valores_por_passe]
-            df_area = pd.DataFrame({
-                "Passe": df["Passe"],
-                "Área (mm²)": areas
-            })
-            st.markdown("### Conversão para área (fio redondo)")
-            st.dataframe(df_area, use_container_width=True)
-            st.line_chart(df_area.set_index("Passe")["Área (mm²)"], height=300)
-
-    # Download dos dados
-    csv = df.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        label="Baixar tabela em CSV",
-        data=csv,
-        file_name="evolucao_reducao_bitola.csv",
-        mime="text/csv",
-    )
-
+    valor_final = valor_atual
     st.markdown("---")
-    unidade = "Diâmetro (mm)" if grandeza == "Diâmetro (mm)" else "Área (mm²)"
-    st.success(f"Valor final ({unidade}): {valor_final:.6f}")
+    st.success(f"Valor final ({valor_col}): {valor_final:.6f}")
 else:
-    st.info("Opcional: informe um valor inicial para ver a evolução por passe e o valor final.")
+    # Se não houver valor inicial, ainda mostramos as reduções por passe e fator acumulado
+    df = pd.DataFrame([{k: v for k, v in row.items() if k in cols_base} for row in linhas])
+    st.markdown("### Passes e fatores (sem valor inicial)")
+    st.dataframe(df, use_container_width=True)
+
+# Conversões para fio redondo
+if valor_atual is not None and eh_redondo:
+    if grandeza == "Área (mm²)":
+        # Converter áreas para diâmetros equivalentes
+        valores_area = [lin[valor_col] for lin in linhas if isinstance(lin[valor_col], (int, float))]
+        diametros = [math.sqrt(4.0 * a / math.pi) for a in valores_area]
+        df_diam = pd.DataFrame({
+            "Passe": [lin["Passe"] for lin in linhas if isinstance(lin[valor_col], (int, float))],
+            "Diâmetro (mm)": diametros
+        })
+        st.markdown("### Conversão para diâmetro (fio redondo)")
+        st.dataframe(df_diam, use_container_width=True)
+        st.line_chart(df_diam.set_index("Passe")["Diâmetro (mm)"], height=300)
+    else:
+        # Converter diâmetros para áreas equivalentes
+        valores_diam = [lin[valor_col] for lin in linhas if isinstance(lin[valor_col], (int, float))]
+        areas = [math.pi * (d ** 2) / 4.0 for d in valores_diam]
+        df_area = pd.DataFrame({
+            "Passe": [lin["Passe"] for lin in linhas if isinstance(lin[valor_col], (int, float))],
+            "Área (mm²)": areas
+        })
+        st.markdown("### Conversão para área (fio redondo)")
+        st.dataframe(df_area, use_container_width=True)
+        st.line_chart(df_area.set_index("Passe")["Área (mm²)"], height=300)
+
+# Download dos dados
+csv = pd.DataFrame(linhas).to_csv(index=False).encode("utf-8")
+st.download_button(
+    label="Baixar tabela em CSV",
+    data=csv,
+    file_name="evolucao_reducao_bitola.csv",
+    mime="text/csv",
+)
 
 st.caption(
-    "Notas:
-"
-    "• A redução por passe é aplicada sequencialmente como fator (1 - redução%).
-"
-    "• A redução acumulada não é a soma simples das reduções individuais.
-"
-    "• Para fio redondo, considera-se área = π·d²/4."
+    """
+    Notas:
+    • A redução por passe é aplicada sequencialmente como fator (1 - redução%).
+    • A redução acumulada não é a soma simples das reduções individuais.
+    • Para fio redondo, considera-se área = π·d²/4.
+    • Agora você vê cada **Redução do passe (%)** para verificar se está em sequência decrescente.
+    """
 )
