@@ -8,7 +8,8 @@ st.title("Calculadora de Redução de Bitola — até 13 passes")
 st.markdown(
     """
     Informe as reduções **percentuais por passe** (até 13) e, opcionalmente, o valor inicial de **diâmetro (mm)** ou **área (mm²)**.
-    O aplicativo calcula a **redução acumulada**, o **valor final** e mostra a **evolução por passe**.    Agora também exibe a **redução individual por passe (%)** e verifica se você está em **reduções decrescentes**.
+    O aplicativo calcula a **redução acumulada**, o **valor final** e mostra a **evolução por passe**.
+    Agora também exibe a **redução individual por passe (%)** e verifica se você está em **reduções decrescentes**.
     """
 )
 
@@ -143,13 +144,11 @@ st.download_button(
 )
 
 st.caption(
-    "Notas:
-"
-    "• A redução por passe é aplicada sequencialmente como fator (1 - redução%).
-"
-    "• A redução acumulada não é a soma simples das reduções individuais.
-"
-    "• Para fio redondo, considera-se área = π·d²/4.
-"
-    "• Agora você vê cada **Redução do passe (%)** para verificar se está em sequência decrescente."
+    """
+    Notas:
+    • A redução por passe é aplicada sequencialmente como fator (1 - redução%).
+    • A redução acumulada não é a soma simples das reduções individuais.
+    • Para fio redondo, considera-se área = π·d²/4.
+    • Agora você vê cada **Redução do passe (%)** para verificar se está em sequência decrescente.
+    """
 )
