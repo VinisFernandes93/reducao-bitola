@@ -171,4 +171,3 @@ st.caption(
     • Para fio redondo, área = π·d²/4 e d = √(4·área/π).
     """
 )
-
